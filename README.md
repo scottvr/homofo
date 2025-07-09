@@ -2,7 +2,7 @@
 
 Transform ordinary English text into "creative" respellings. Bypass copyright filters in AI models (LLM, TTS, music genAI, etc.) general AInarchy.
 
-(I personally woould love to see a judicial ruling on a book that if read aloud sounds just like Harry Potter and the Sorceror's Stone, but when read visually it's just a bunch of nonsense words.  Also, what if - kinda like Voldemort - the book came shrinkwrapped in a license that says "You may not read this book aloud, but you can read it." It would surely make a point to the litigating attorneys and judge.)
+(I personally woould love to see a judicial ruling on a book that if read aloud sounds just like Harry Potter and the Sorceror's Stone, but when read visually it's just a bunch of nonsense words.  Also, what if - kinda like Voldemort - the book came shrinkwrapped in a license that says "You may not read this book aloud, but you can read it." It would surely [make a point to the litigating attorneys and judge.](https://github.com/scottvr/HoMofo/mp3/README.md)
 
 #### Overview  
 HoMofo reads an input text (file or stdin), tokenizes it into words, punctuation, and whitespace, and replaces each word with a homophonic alternative. It supports:
