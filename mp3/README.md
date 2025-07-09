@@ -1,6 +1,6 @@
 I'm lookin' at you, Disney. Come at me, bro!
 
-[ai-generated mp3 with the lyrics below](https://github.com/scottvr/HoMofo/raw/main/mp3/Gad%20Goetz%20and%20Gizmos.mp3)
+[ai-generated mp3 with the lyrics below](https://github.com/scottvr/HoMofo/raw/main/mp3/README.md)
 
 ```text
 Lack ad thus staff, isn't tit neet?
