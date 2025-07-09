@@ -98,5 +98,30 @@ python homofo.py \
 
 Experiment with these knobs to craft anything from near-perfect phonetic clones to ludicrously absurd puns!
 
+# Example Outputso
+
+```text
+People hayes aul an mai braun
+Lightly, thing adjust don't seam they sahm
+Actin' fanny butt AI don't no wai
+'Scuse mi wile AI kis they skye
+```
+
+```text
+THEY FURST BACK EAVE MOISES, CULLED
+GENEROUS
+
+
+CHAPTERS 1
+1 Inn they beginnings Goad creates they heavens end they raw.
+2 End they raw ways walkout for, end avoid; end harkness ways apon they faze eave they depp. End they Spirits eave Goad move apon they faze eave they walters.
+3 End Goad sid, Lett their bee lite: end their ways lite.
+4 End Goad sow they lite, thought tit ways goode: end Goad derided they lite frum they harkness.
+5 End Goad culled they lite Daye, end they harkness hee culled Knight. End they evenings end they mourning her they furst daye.
+6 AAHÂ¶ End Goad sid, Lett their bean ay permanent inn they amidst eave they walters, end lett tit divides they walters frum they walters.
+7 End Goad maid they permanent, end derided they walters witch her ender they permanent frum they walters witch her abuzz they permanent: end tit ways sew.
+8 End Goad culled they permanent Heavens. End they evenings end they mourning her they seconds daye.
+```
+
 #### License  
 MIT © 2025 Scott VanRavenswaay (with help from chatgpt-4o-mini-high)

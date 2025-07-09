@@ -25,7 +25,7 @@ STRICT_ONLY = False        # only strict CMU homophones
 PREFER_LONGER = False      # prefer longer candidates
 ENABLE_MULTISPLIT = False  # try splitting words into two homophones
 
-# Curated overrides
+# Curated overrides TEST
 CURATED = {
     "nice":   ["ice", "gneiss"],
     "it":     ["tit"],
@@ -35,6 +35,10 @@ CURATED = {
     "red":    ["read"],
     "eye":    ["I", "aye"],
     "please": ["pleas"],
+    "mister": ["missed her"],
+    "dunno": ["dough no"],
+    "wouldn't": ["wooden"],
+    "beginning": ["big inning"],
 }
 
 # Phrase-level overrides
