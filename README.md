@@ -1,6 +1,6 @@
 # HoMofo – Homophonic Respeller
 
-Transform ordinary English text into clever, whimsical “sound-alike” respellings.
+Transform ordinary English text into "creative" respellings. Bypass copyright filters in AI models, etc. general AInarchy.
 
 #### Overview  
 HoMofo reads an input text (file or stdin), tokenizes it into words, punctuation, and whitespace, and replaces each word with a homophonic alternative. It supports:
