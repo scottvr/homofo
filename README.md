@@ -98,7 +98,7 @@ python homofo.py \
 
 Experiment with these knobs to craft anything from near-perfect phonetic clones to ludicrously absurd puns!
 
-# Example Outputso
+# Example Outputs
 
 ```text
 People hayes aul an mai braun
