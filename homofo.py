@@ -177,10 +177,20 @@ def get_homophone_substitution(token):
         except:
             pass
 
-    # filter real English, drop singles
+    # filter real English
     primary = {w for w in candidates if zipf_frequency(w, 'en') >= MIN_ZIPF and len(w) > 1}
-    filtered = primary if primary else {w for w in candidates if len(w) > 1}
-    if not filtered: return token
+
+    if STRICT_ONLY:
+        # in strict-only mode, only keep those meeting MIN_ZIPF, otherwise give up
+        filtered = primary
+        if not filtered:
+            return token
+    else:
+        # non-strict: fallback to any len>1 if none meet frequency
+        filtered = primary if primary else {w for w in candidates if len(w) > 1}
+
+    if not filtered:
+        return token
 
     # scoring
     max_len = max(len(w) for w in filtered)
@@ -215,7 +225,7 @@ def homophonic_respelling(text):
 
 
 def main():
-    global STRICT_ONLY, MODE, PREFER_LONGER, ENABLE_MULTISPLIT, ALPHA, BETA, GAMMA, LENGTH_WEIGHT
+    global STRICT_ONLY, MODE, PREFER_LONGER, ENABLE_MULTISPLIT, ALPHA, BETA, GAMMA, LENGTH_WEIGHT, MIN_ZIPF
     parser = argparse.ArgumentParser(description="Homophonic respeller CLI")
     parser.add_argument("input_file", help="Path to input text file")
     parser.add_argument("output_file", nargs='?', default=None, help="Output file (defaults to stdout)")
@@ -227,6 +237,7 @@ def main():
     parser.add_argument("--beta", type=float, default=BETA, help="Orthographic similarity weight")
     parser.add_argument("--gamma", type=float, default=GAMMA, help="Frequency weight")
     parser.add_argument("--length-weight", type=float, default=LENGTH_WEIGHT, help="Length preference weight")
+    parser.add_argument("--min-zipf", type=float, default=MIN_ZIPF, help="Minimum Zipf frequency")
     args = parser.parse_args()
 
     STRICT_ONLY = args.strict_only
