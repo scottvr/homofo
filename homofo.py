@@ -10,10 +10,9 @@ import sys
 # ————————————————————————————————————————————
 # Default tunable weights for scoring (can override via CLI)
 ALPHA = 1.0     # phone similarity weight
-BETA = 0.2      # orthographic similarity weight
-GAMMA = 0.5     # frequency weight
+BETA = 0.5      # orthographic similarity weight
+GAMMA = 0.2     # frequency weight
 LENGTH_WEIGHT = 0.0  # length preference weight
-MIN_MULTI_WORD_SPLIT = 2  # minimum length for multi-word splits
 
 # Minimum zipf frequency for a candidate to be counted as real English
 MIN_ZIPF = 2.0  # ~ once per million
@@ -123,7 +122,7 @@ def try_syllable_split(base):
 def try_multiword_split(base):
     L = len(base)
     best = None; best_score = -1.0
-    for i in range(MIN_MULTI_WORD_SPLIT, L - 1):
+    for i in range(2, L - 1):
         left, right = base[:i], base[i:]
         lsub = get_strict_sub(left)
         rsub = get_strict_sub(right)
@@ -144,8 +143,10 @@ def get_homophone_substitution(token):
     if not base: return None
     low = base.lower()
 
-    # multi-word split
-    if ENABLE_MULTISPLIT:
+    # multi-word split (skip under strict-only)
+    if ENABLE_MULTISPLIT and not STRICT_ONLY:
+        mw = try_multiword_split(low)
+        if mw: return pfx + mw + sfx
         mw = try_multiword_split(low)
         if mw: return pfx + mw + sfx
 
@@ -209,9 +210,7 @@ def homophonic_respelling(text):
 
 
 def main():
-    global STRICT_ONLY, MODE, PREFER_LONGER, ENABLE_MULTISPLIT, ALPHA, BETA, GAMMA 
-    global LENGTH_WEIGHT, MIN_ZIPF, MIN_MULTI_WORD_SPLIT
-
+    global STRICT_ONLY, MODE, PREFER_LONGER, ENABLE_MULTISPLIT, ALPHA, BETA, GAMMA, LENGTH_WEIGHT
     parser = argparse.ArgumentParser(description="Homophonic respeller CLI")
     parser.add_argument("input_file", help="Path to input text file")
     parser.add_argument("output_file", nargs='?', default=None, help="Output file (defaults to stdout)")
@@ -223,8 +222,6 @@ def main():
     parser.add_argument("--beta", type=float, default=BETA, help="Orthographic similarity weight")
     parser.add_argument("--gamma", type=float, default=GAMMA, help="Frequency weight")
     parser.add_argument("--length-weight", type=float, default=LENGTH_WEIGHT, help="Length preference weight")
-    parser.add_argument("--min-zipf", type=float, default=MIN_ZIPF, help="Minimum Zipf frequency")
-    parser.add_argument("--min-multi-word-split", type=int, default=MIN_MULTI_WORD_SPLIT, help="Minimum multi-word split length")
     args = parser.parse_args()
 
     STRICT_ONLY = args.strict_only
