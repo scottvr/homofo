@@ -146,11 +146,16 @@ def get_homophone_substitution(token):
     # multi-word split (skip under strict-only)
     if ENABLE_MULTISPLIT and not STRICT_ONLY:
         mw = try_multiword_split(low)
-        if mw: return pfx + mw + sfx
-        mw = try_multiword_split(low)
-        if mw: return pfx + mw + sfx
+        if mw:
+            return pfx + mw + sfx
 
-    # syllable split
+    # syllable split (skip under strict-only)
+    if MODE == 'syllable' and not STRICT_ONLY:
+        ss = try_syllable_split(low)
+        if ss:
+            return pfx + ss + sfx
+
+    # curated overrides
     if MODE == 'syllable':
         ss = try_syllable_split(low)
         if ss: return pfx + ss + sfx

@@ -96,7 +96,7 @@ python homofo.py \
 - **`--prefer-longer`** + `--length-weight 0.3` favors longer respellings  
 - **`--gamma 0.4`** + `--min-zipf 2.5` ensures only common words are used and that frequency strongly influences choice  
 
-Experiment with these knobs to craft anything from near-perfect phonetic clones to delightfully absurd puns!
+Experiment with these knobs to craft anything from near-perfect phonetic clones to ludicrously absurd puns!
 
 #### License  
-MIT © 2025 Your Name  
+MIT © 2025 Scott VanRavenswaay (with help from chatgpt-4o-mini-high)
