@@ -18,6 +18,33 @@ Replacements are **scored** by a weighted combination of:
 2. **Spelling distance** (BETA)  
 3. **Word frequency** (GAMMA + MIN_ZIPF)  
 4. **Optional length bonus** (LENGTH_WEIGHT)
+### Caching and Performance
+
+HoMofo uses a tiered caching system to maximize performance and build an increasingly rich network of phonetic relationships over time.
+
+1.  **Tier 1: In-Memory LRU Cache**
+    * **What it is:** A "Least Recently Used" cache that stores the most recent word substitutions directly in memory.
+    * **Purpose:** Provides instantaneous lookups for words that appear frequently within a single run, dramatically speeding up the processing of large texts.
+    * **Control:** The size of this cache can be adjusted with the `--lru-cache-size` command-line argument.
+
+2.  **Tier 2: Persistent SQLite Database (`homophone_cache.db`)**
+    * **What it is:** A local database file that stores all homophone relationships discovered across all runs.
+    * **Purpose:** Eliminates the need for repeated API calls for the same words in future sessions. Once a word's homophones are looked up, they are saved permanently.
+
+#### How the Database Enriches Connections
+
+The database doesn't just store results; it creates a rich, interconnected graph of phonetic relationships. The schema is simple but powerful:
+
+* `words`: A table of unique words.
+* `homophone_links`: A table linking two words together, crucially storing the `source` of the link (`cmu` for strict homophones or `datamuse` for "sounds-like" matches).
+
+By caching results from **both** sources, the tool builds connections that wouldn't be possible with a single source. For example:
+
+* You look up the word `awesome`. Datamuse might return `possum` as a "sounds-like" match. This link is cached.
+* Later, you look up `possum`. The CMU dictionary might find a strict homophone, `possume`.
+* Now, the database implicitly links `awesome` -> `possum` -> `possume`.
+
+Over time, this allows HoMofo to discover and leverage a much wider and more creative set of phonetic substitutions than either the CMU dictionary or the Datamuse API could provide alone.
 
 #### Installation  
 ```bash
