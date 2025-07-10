@@ -107,7 +107,23 @@ Because the search is phoneme-driven, and the set of viable homophones per token
 
 Essentially, this is round-trip lossy compression of language with a fuzzy codec.
 
-# Example Outputs
+Example Input:
+```text
+so you don't understand me when i write this way?
+```
+
+Transformed Output:
+```text
+sew yu don't understands mi wen ai rite thus wy?
+```
+
+Doubly-transformed Output:
+```text
+so you don't understand me when aye write this way?
+```
+
+
+## More Example Outputs
 
 ```text
 People hayes aul an mai braun
