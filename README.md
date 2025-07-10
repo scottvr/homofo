@@ -100,6 +100,13 @@ python homofo.py \
 
 Experiment with these knobs to craft anything from near-perfect phonetic clones to ludicrously absurd puns!
 
+# Reversibility
+The respelling process is mostly reversible, meaning you can take the output and convert it back to the original text using the same homophone mappings. However, some transformations may lose information (e.g., "knight"→"night") or introduce ambiguity (e.g., "sea"→"see").
+
+Because the search is phoneme-driven, and the set of viable homophones per token is relatively narrow, re-running the “gibberish” through the model tends to return to stable attractors — often the original word or near-synonyms.
+
+Essentially, this is round-trip lossy compression of language with a fuzzy codec.
+
 # Example Outputs
 
 ```text

@@ -6,55 +6,8 @@ import pronouncing  # pip install pronouncing
 from wordfreq import zipf_frequency  # pip install wordfreq
 import argparse
 import sys
-import jellyfish
-import epitran
-
-class PhoneticScorer:
-    """
-    Calculates a weighted phonetic similarity score using multiple algorithms.
-    Inspired by the approach in pastal.py.
-    """
-    def __init__(self):
-        try:
-            self.epi = epitran.Epitran("eng-Latn")
-        except Exception:
-            self.epi = None
-            print("Warning: `epitran` not found. IPA similarity will be disabled.", file=sys.stderr)
-        
-        self.jellyfish = jellyfish
-        self.cache = {} #
-
-    def calculate_similarity(self, word1: str, word2: str) -> float:
-        """
-        Calculates a composite phonetic score between two words.
-        """
-        if (word1, word2) in self.cache:
-            return self.cache[(word1, word2)]
-        
-        if not self.epi:
-            # Fallback if epitran is missing
-            return 1.0 / (1.0 + self.jellyfish.levenshtein_distance(word1, word2))
-
-        # Get phonetic representations from different algorithms
-        soundex1, soundex2 = self.jellyfish.soundex(word1), self.jellyfish.soundex(word2)
-        meta1, meta2 = self.jellyfish.metaphone(word1), self.jellyfish.metaphone(word2)
-        ipa1 = self.epi.transliterate(word1)
-        ipa2 = self.epi.transliterate(word2)
-
-        # Calculate individual similarity scores
-        soundex_match = 1.0 if soundex1 == soundex2 else 0.0
-        metaphone_match = 1.0 if meta1 == meta2 else 0.0
-        ipa_similarity = self.jellyfish.jaro_winkler_similarity(ipa1, ipa2)
-
-        # Weighted average for the final score
-        score = (0.2 * soundex_match) + (0.3 * metaphone_match) + (0.5 * ipa_similarity)
-        
-        self.cache[(word1, word2)] = score
-        return score
-
-# Instantiate the scorer globally to maintain the cache across all calls in the script.
-phonetic_scorer = PhoneticScorer()
-
+import json
+import os
 
 # ————————————————————————————————————————————
 # Default tunable weights for scoring (can override via CLI)
@@ -62,9 +15,9 @@ ALPHA = 1.0     # phone similarity weight
 BETA = 0.5      # orthographic similarity weight
 GAMMA = 0.2     # frequency weight
 LENGTH_WEIGHT = 0.0  # length preference weight
+MIN_ZIPF = 2.0  # minimum Zipf frequency for a candidate to be counted as real English
 
-# Minimum zipf frequency for a candidate to be counted as real English
-MIN_ZIPF = 2.0  # ~ once per million
+# Minimum zipf frequency for a candidate to be counted as real English\ nMIN_ZIPF = 2.0  # ~ once per million
 
 # Tokenization mode: 'word' or 'syllable'
 MODE = 'word'
@@ -74,26 +27,43 @@ STRICT_ONLY = False        # only strict CMU homophones
 PREFER_LONGER = False      # prefer longer candidates
 ENABLE_MULTISPLIT = False  # try splitting words into two homophones
 
+# Cache file for Datamuse responses
+DATAMUSE_CACHE_FILE = 'datamuse_cache.json'
+if os.path.exists(DATAMUSE_CACHE_FILE):
+    try:
+        with open(DATAMUSE_CACHE_FILE, 'r', encoding='utf-8') as cf:
+            DATAMUSE_CACHE = json.load(cf)
+    except Exception:
+        DATAMUSE_CACHE = {}
+else:
+    DATAMUSE_CACHE = {}
+
 # Curated overrides TEST
 CURATED = {
-    "nice":   ["ice", "gneiss"],
-    "it":     ["tit"],
-    "be":     ["bee", "bean"],
-    "see":    ["sea"],
-    "read":   ["reed"],
-    "red":    ["read"],
-    "eye":    ["I", "aye"],
-    "please": ["pleas"],
-    "mister": ["missed her"],
-    "dunno": ["dough no"],
+    "nice":     ["ice", "gneiss"],
+    "it":       ["tit"],
+    "be":       ["bee", "bean"],
+    "see":      ["sea"],
+    "read":     ["reed"],
+    "red":      ["read"],
+    "eye":      ["I", "aye"],
+    "please":   ["pleas"],
+    "mister":   ["missed her"],
+    "dunno":    ["dough no"],
     "wouldn't": ["wooden"],
-    "beginning": ["big inning"],
+    "beginning":["big inning"],
 }
 
 # Phrase-level overrides
 PHRASES = {
     r"\bwouldn't it\b": "wooden tit",
     r"\bit be\b":       "eat bee",
+}
+
+# Blacklist of disallowed substitutions: map original -> set of banned respellings
+BLACKLIST = {
+    "st": {"street"},
+    # add more entries: "word": {"badsub1", "badsub2"}
 }
 
 # ————————————————————————————————————————————
@@ -209,39 +179,49 @@ def get_homophone_substitution(token):
             return pfx + ss + sfx
 
     # curated overrides
-    if MODE == 'syllable':
-        ss = try_syllable_split(low)
-        if ss: return pfx + ss + sfx
-
-    # curated overrides
     if low in CURATED:
         return pfx + random.choice(CURATED[low]) + sfx
 
-    # build candidates
-    candidates = set(generate_strict_homophones(low))
-    if not STRICT_ONLY:
+    # build Datamuse candidate list with caching
+    if low in DATAMUSE_CACHE:
+        datamuse_list = DATAMUSE_CACHE[low]
+    else:
+        datamuse_list = []
         try:
             resp = requests.get(f"https://api.datamuse.com/words?sl={low}&max=20")
             resp.raise_for_status()
-            for entry in resp.json():
-                w = entry['word']
-                if w.isalpha() and w.lower() != low:
-                    candidates.add(w)
+            datamuse_list = [entry['word'] for entry in resp.json() if entry.get('word')]
+        except:
+            pass
+        DATAMUSE_CACHE[low] = datamuse_list
+        # save cache
+        try:
+            with open(DATAMUSE_CACHE_FILE, 'w', encoding='utf-8') as cf:
+                json.dump(DATAMUSE_CACHE, cf)
         except:
             pass
 
-    # filter real English
-    primary = {w for w in candidates if zipf_frequency(w, 'en') >= MIN_ZIPF and len(w) > 1}
+    candidates = set(generate_strict_homophones(low))
+    if not STRICT_ONLY:
+        for w in datamuse_list:
+            if w.isalpha() and w.lower() != low:
+                candidates.add(w)
 
+    # filter real English by frequency cutoff
+    primary = {w for w in candidates if zipf_frequency(w, 'en') >= MIN_ZIPF and len(w) > 1}
     if STRICT_ONLY:
-        # in strict-only mode, only keep those meeting MIN_ZIPF, otherwise give up
         filtered = primary
         if not filtered:
             return token
     else:
-        # non-strict: fallback to any len>1 if none meet frequency
         filtered = primary if primary else {w for w in candidates if len(w) > 1}
 
+    if not filtered:
+        return token
+
+    # apply blacklist
+    banned = BLACKLIST.get(low, set())
+    filtered = {w for w in filtered if w not in banned}
     if not filtered:
         return token
 
@@ -256,7 +236,7 @@ def get_homophone_substitution(token):
         score = ALPHA*(1/(1+pd)) + BETA*(1/(1+od)) + GAMMA*fs + LENGTH_WEIGHT*length_term
         if score > best_score:
             best_score, best = score, w
-    return pfx + best_candidate + sfx
+    return pfx + best + sfx
 
 
 def homophonic_respelling(text):
@@ -278,19 +258,31 @@ def homophonic_respelling(text):
 
 
 def main():
-    global STRICT_ONLY, MODE, PREFER_LONGER, ENABLE_MULTISPLIT, ALPHA, BETA, GAMMA, LENGTH_WEIGHT, MIN_ZIPF
+    global STRICT_ONLY, MODE, PREFER_LONGER, ENABLE_MULTISPLIT
+    global ALPHA, BETA, GAMMA, LENGTH_WEIGHT, MIN_ZIPF
+
     parser = argparse.ArgumentParser(description="Homophonic respeller CLI")
     parser.add_argument("input_file", help="Path to input text file")
-    parser.add_argument("output_file", nargs='?', default=None, help="Output file (defaults to stdout)")
-    parser.add_argument("--strict-only", action='store_true', help="Use only strict homophones")
-    parser.add_argument("--mode", choices=['word','syllable'], default='word', help="Tokenization mode")
-    parser.add_argument("--prefer-longer", action='store_true', help="Prefer longer homophones")
-    parser.add_argument("--multiword", action='store_true', help="Enable multi-word splits")
-    parser.add_argument("--alpha", type=float, default=ALPHA, help="Phone similarity weight")
-    parser.add_argument("--beta", type=float, default=BETA, help="Orthographic similarity weight")
-    parser.add_argument("--gamma", type=float, default=GAMMA, help="Frequency weight")
-    parser.add_argument("--length-weight", type=float, default=LENGTH_WEIGHT, help="Length preference weight")
-    parser.add_argument("--min-zipf", type=float, default=MIN_ZIPF, help="Minimum Zipf frequency")
+    parser.add_argument("output_file", nargs='?', default=None,
+                        help="Output file (defaults to stdout)")
+    parser.add_argument("--strict-only", action='store_true',
+                        help="Use only strict homophones")
+    parser.add_argument("--mode", choices=['word','syllable'], default='word',
+                        help="Tokenization mode")
+    parser.add_argument("--prefer-longer", action='store_true',
+                        help="Prefer longer homophones")
+    parser.add_argument("--multiword", action='store_true',
+                        help="Enable multi-word splits")
+    parser.add_argument("--alpha", type=float, default=ALPHA,
+                        help="Phone similarity weight")
+    parser.add_argument("--beta", type=float, default=BETA,
+                        help="Orthographic similarity weight")
+    parser.add_argument("--gamma", type=float, default=GAMMA,
+                        help="Frequency weight")
+    parser.add_argument("--length-weight", type=float, default=LENGTH_WEIGHT,
+                        help="Length preference weight")
+    parser.add_argument("--min-zipf", type=float, default=MIN_ZIPF,
+                        help="Minimum Zipf frequency")
     args = parser.parse_args()
 
     STRICT_ONLY = args.strict_only
@@ -301,6 +293,7 @@ def main():
     BETA = args.beta
     GAMMA = args.gamma
     LENGTH_WEIGHT = args.length_weight
+    MIN_ZIPF = args.min_zipf
 
     try:
         infile = open(args.input_file, encoding='utf-8')
