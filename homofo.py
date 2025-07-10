@@ -6,6 +6,55 @@ import pronouncing  # pip install pronouncing
 from wordfreq import zipf_frequency  # pip install wordfreq
 import argparse
 import sys
+import jellyfish
+import epitran
+
+class PhoneticScorer:
+    """
+    Calculates a weighted phonetic similarity score using multiple algorithms.
+    Inspired by the approach in pastal.py.
+    """
+    def __init__(self):
+        try:
+            self.epi = epitran.Epitran("eng-Latn")
+        except Exception:
+            self.epi = None
+            print("Warning: `epitran` not found. IPA similarity will be disabled.", file=sys.stderr)
+        
+        self.jellyfish = jellyfish
+        self.cache = {} #
+
+    def calculate_similarity(self, word1: str, word2: str) -> float:
+        """
+        Calculates a composite phonetic score between two words.
+        """
+        if (word1, word2) in self.cache:
+            return self.cache[(word1, word2)]
+        
+        if not self.epi:
+            # Fallback if epitran is missing
+            return 1.0 / (1.0 + self.jellyfish.levenshtein_distance(word1, word2))
+
+        # Get phonetic representations from different algorithms
+        soundex1, soundex2 = self.jellyfish.soundex(word1), self.jellyfish.soundex(word2)
+        meta1, meta2 = self.jellyfish.metaphone(word1), self.jellyfish.metaphone(word2)
+        ipa1 = self.epi.transliterate(word1)
+        ipa2 = self.epi.transliterate(word2)
+
+        # Calculate individual similarity scores
+        soundex_match = 1.0 if soundex1 == soundex2 else 0.0
+        metaphone_match = 1.0 if meta1 == meta2 else 0.0
+        ipa_similarity = self.jellyfish.jaro_winkler_similarity(ipa1, ipa2)
+
+        # Weighted average for the final score
+        score = (0.2 * soundex_match) + (0.3 * metaphone_match) + (0.5 * ipa_similarity)
+        
+        self.cache[(word1, word2)] = score
+        return score
+
+# Instantiate the scorer globally to maintain the cache across all calls in the script.
+phonetic_scorer = PhoneticScorer()
+
 
 # ————————————————————————————————————————————
 # Default tunable weights for scoring (can override via CLI)
@@ -207,7 +256,7 @@ def get_homophone_substitution(token):
         score = ALPHA*(1/(1+pd)) + BETA*(1/(1+od)) + GAMMA*fs + LENGTH_WEIGHT*length_term
         if score > best_score:
             best_score, best = score, w
-    return pfx + best + sfx
+    return pfx + best_candidate + sfx
 
 
 def homophonic_respelling(text):
