@@ -61,20 +61,20 @@ BLACKLIST = {
 # ————————————————————————————————————————————
 
 def setup_database(db_file):
-    """Initializes a streamlined SQLite database for reciprocal lookups."""
+    """Initializes a streamlined SQLite database with source tracking."""
     conn = sqlite3.connect(db_file)
     cursor = conn.cursor()
-    # A single, central table for all unique words
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS words (
         id INTEGER PRIMARY KEY,
         word TEXT UNIQUE NOT NULL
     )''')
-    # A table to link words that are homophones of each other
+    # Add a 'source' column to track where the link came from
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS homophone_links (
         word_id INTEGER,
         homophone_id INTEGER,
+        source TEXT NOT NULL,
         FOREIGN KEY (word_id) REFERENCES words(id),
         FOREIGN KEY (homophone_id) REFERENCES words(id),
         PRIMARY KEY (word_id, homophone_id)
@@ -199,63 +199,87 @@ def get_homophone_substitution(token, db_conn):
         return pfx + random.choice(CURATED[low]) + sfx
 
     cursor = db_conn.cursor()
+    all_candidates = set()
     
-    # Query the cache for existing links
+    # 1. READ FROM CACHE with source information
     cursor.execute("""
-        SELECT w2.word
+        SELECT w2.word, hl.source
         FROM words w1
         JOIN homophone_links hl ON w1.id = hl.word_id
         JOIN words w2 ON w2.id = hl.homophone_id
         WHERE w1.word = ?
     """, (low,))
     cached_results = cursor.fetchall()
-    
-    # Use a combined list of candidates for processing
-    all_candidates = set()
 
+    # If we got results from the cache, process them according to the flags
     if cached_results:
-        # If we have cached results, use them.
-        all_candidates.update(row[0] for row in cached_results)
-    else:
-        # --- CACHE MISS: Get candidates from ALL sources and cache them ---
+        print(f"Cache hit for '{low}': {len(cached_results)} candidates\n", file=sys.stderr)
+        cached_cmu = {word for word, source in cached_results if source == 'cmu'}
+        cached_datamuse = {word for word, source in cached_results if source == 'datamuse'}
+        print(f"\tfrom {'CMU: ' if cached_cmu else ''}{', '.join(cached_cmu)}{' ' if cached_cmu else ''} {'Datamuse: ' if cached_datamuse else ''}{', '.join(cached_datamuse)}\n", file=sys.stderr)
+
+
+        if STRICT_ONLY:
+            all_candidates.update(cached_cmu)
+        elif STRICT_FIRST:
+            # Use strict results if they exist, otherwise fall back to datamuse
+            all_candidates.update(cached_cmu if cached_cmu else cached_datamuse)
+        else:
+            # Use all cached results
+            all_candidates.update(cached_cmu | cached_datamuse)
+
+    # If the cache was empty OR the flag logic resulted in no candidates,
+    # then we proceed to fetch new ones.
+    if not all_candidates:
+        # --- CACHE MISS or EMPTY CACHE RESULT: Tiered lookup for new candidates ---
         
-        # 1. Get candidates from Datamuse API
-        datamuse_list = []
-        try:
-            resp = requests.get(f"https://api.datamuse.com/words?sl={low}&max=20")
-            resp.raise_for_status()
-            datamuse_list = [entry['word'] for entry in resp.json() if entry.get('word')]
-        except requests.RequestException as e:
-            print(f"API Error for word '{low}': {e}", file=sys.stderr)
-        
-        # 2. Get candidates from local CMUdict
         cmu_list = generate_strict_homophones(low)
-        
-        # 3. Combine all new candidates into a single set
-        new_candidates_to_cache = set(datamuse_list + cmu_list)
-        all_candidates.update(new_candidates_to_cache) # Use this combined set now
+        if cmu_list:
+            print(f"CMU hit for '{low}': {len(cmu_list)} candidates", file=sys.stderr)
+        datamuse_list = []
 
-        # 4. Write the combined set to the database
-        if new_candidates_to_cache:
+        # Condition for Datamuse call remains the same
+        if not STRICT_ONLY and (not STRICT_FIRST or not cmu_list):
             try:
-                def get_word_id(word):
-                    cursor.execute("INSERT OR IGNORE INTO words (word) VALUES (?)", (word,))
-                    return cursor.execute("SELECT id FROM words WHERE word = ?", (word,)).fetchone()[0]
+                resp = requests.get(f"https://api.datamuse.com/words?sl={low}&max=20")
+                resp.raise_for_status()
+                datamuse_list = [entry['word'] for entry in resp.json() if entry.get('word')]
+            except requests.RequestException as e:
+                print(f"API Error for word '{low}': {e}", file=sys.stderr)
+        
+        # Now, populate 'all_candidates' for the CURRENT run based on the new results
+        if STRICT_ONLY:
+            all_candidates.update(cmu_list)
+        elif STRICT_FIRST:
+            all_candidates.update(cmu_list if cmu_list else datamuse_list)
+        else:
+            all_candidates.update(set(cmu_list) | set(datamuse_list))
 
+        # --- WRITE new results to the database with source info ---
+        try:
+            def get_word_id(word):
+                cursor.execute("INSERT OR IGNORE INTO words (word) VALUES (?)", (word,))
+                return cursor.execute("SELECT id FROM words WHERE word = ?", (word,)).fetchone()[0]
+
+            def write_links(word_list, source_name):
+                if not word_list: return
                 original_word_id = get_word_id(low)
-
-                for cand_word in new_candidates_to_cache:
+                for cand_word in word_list:
                     candidate_id = get_word_id(cand_word)
-                    
-                    # Store forward and reverse links
-                    cursor.execute("INSERT OR IGNORE INTO homophone_links (word_id, homophone_id) VALUES (?, ?)", 
-                                   (original_word_id, candidate_id))
-                    cursor.execute("INSERT OR IGNORE INTO homophone_links (word_id, homophone_id) VALUES (?, ?)", 
-                                   (candidate_id, original_word_id))
-                db_conn.commit()
-            except sqlite3.Error as e:
-                print(f"Database write error: {e}", file=sys.stderr)
+                    # Insert with source, ignoring if the link already exists
+                    # (it might from a different source)
+                    cursor.execute("INSERT OR IGNORE INTO homophone_links (word_id, homophone_id, source) VALUES (?, ?, ?)", 
+                                   (original_word_id, candidate_id, source_name))
+                    cursor.execute("INSERT OR IGNORE INTO homophone_links (word_id, homophone_id, source) VALUES (?, ?, ?)", 
+                                   (candidate_id, original_word_id, source_name))
 
+            write_links(cmu_list, 'cmu')
+            write_links(datamuse_list, 'datamuse')
+            db_conn.commit()
+
+        except sqlite3.Error as e:
+            print(f"Database write error: {e}", file=sys.stderr)
+    
     # The rest of the function now operates on the 'all_candidates' set,
     # which is sourced from the cache or from the newly combined API/CMU lists.
     
@@ -318,14 +342,18 @@ def homophonic_respelling(text, db_conn):
 
 def main():
     global STRICT_ONLY, MODE, PREFER_LONGER, ENABLE_MULTISPLIT
-    global ALPHA, BETA, GAMMA, LENGTH_WEIGHT, MIN_ZIPF
+    global ALPHA, BETA, GAMMA, LENGTH_WEIGHT, MIN_ZIPF, STRICT_FIRST
 
     parser = argparse.ArgumentParser(description="Homophonic respeller CLI")
     parser.add_argument("input_file", help="Path to input text file")
     parser.add_argument("output_file", nargs='?', default=None,
                         help="Output file (defaults to stdout)")
+    parser.add_argument("--chunk-size", type=int, default=1000,
+                        help="Number of tokens to process at a time.")
     parser.add_argument("--strict-only", action='store_true',
                         help="Use only strict homophones")
+    parser.add_argument("--strict-first", action='store_true',
+                        help="Look for strict homophones first before calling the API.")
     parser.add_argument("--mode", choices=['word','syllable'], default='word',
                         help="Tokenization mode")
     parser.add_argument("--prefer-longer", action='store_true',
@@ -345,6 +373,7 @@ def main():
     args = parser.parse_args()
 
     STRICT_ONLY = args.strict_only
+    STRICT_FIRST = args.strict_first
     MODE = args.mode
     PREFER_LONGER = args.prefer_longer
     ENABLE_MULTISPLIT = args.multiword
@@ -353,23 +382,46 @@ def main():
     GAMMA = args.gamma
     LENGTH_WEIGHT = args.length_weight
     MIN_ZIPF = args.min_zipf
+    CHUNK_SIZE = args.chunk_size
 
     db_conn = None
     try:
         db_conn = setup_database(DB_FILE)
-        infile = open(args.input_file, encoding='utf-8')
+        # We will open and read the whole file, then close it.
+        print("Reading input file...", file=sys.stderr)
+        with open(args.input_file, encoding='utf-8') as infile:
+            content = infile.read()
+        print("File read. Tokenizing content...", file=sys.stderr)
+        
     except Exception as e:
-        print(f"Error opening files: {e}", file=sys.stderr)
+        print(f"Error opening or reading file: {e}", file=sys.stderr)
         if db_conn:
             db_conn.close()
         sys.exit(1)
 
+    # Tokenize the entire content at once
+    all_tokens = re.findall(r"[\w']+|\s+|[^\w\s]", content)
+    total_tokens = len(all_tokens)
+    print(f"Tokenizing complete. Processing {total_tokens} tokens in chunks of {CHUNK_SIZE}.", file=sys.stderr)
+
     writer = open(args.output_file, 'w', encoding='utf-8') if args.output_file else sys.stdout
-    for line in infile:
-        # Pass the database connection through the call chain
-        writer.write(homophonic_respelling(line, db_conn))
+
+    # Process the list of tokens in manageable chunks
+    for i in range(0, total_tokens, CHUNK_SIZE):
+        # Create a text chunk by joining the tokens
+        token_chunk = all_tokens[i:i + CHUNK_SIZE]
+        text_chunk = "".join(token_chunk)
         
-    infile.close()
+        # Process the chunk as before
+        processed_chunk = homophonic_respelling(text_chunk, db_conn)
+        writer.write(processed_chunk)
+        
+        # Print progress to the console
+        percent_done = min(((i + CHUNK_SIZE) / total_tokens) * 100, 100)
+        print(f"  Processed up to token {i + CHUNK_SIZE}... ({percent_done:.1f}%)", file=sys.stderr)
+        
+    print("Processing complete.", file=sys.stderr)
+
     if args.output_file:
         writer.close()
     if db_conn:
