@@ -6,7 +6,7 @@ import pronouncing  # pip install pronouncing
 from wordfreq import zipf_frequency  # pip install wordfreq
 import argparse
 import sys
-import json
+import sqlite3
 import os
 
 # ————————————————————————————————————————————
@@ -17,8 +17,6 @@ GAMMA = 0.2     # frequency weight
 LENGTH_WEIGHT = 0.0  # length preference weight
 MIN_ZIPF = 2.0  # minimum Zipf frequency for a candidate to be counted as real English
 
-# Minimum zipf frequency for a candidate to be counted as real English\ nMIN_ZIPF = 2.0  # ~ once per million
-
 # Tokenization mode: 'word' or 'syllable'
 MODE = 'word'
 
@@ -27,16 +25,8 @@ STRICT_ONLY = False        # only strict CMU homophones
 PREFER_LONGER = False      # prefer longer candidates
 ENABLE_MULTISPLIT = False  # try splitting words into two homophones
 
-# Cache file for Datamuse responses
-DATAMUSE_CACHE_FILE = 'datamuse_cache.json'
-if os.path.exists(DATAMUSE_CACHE_FILE):
-    try:
-        with open(DATAMUSE_CACHE_FILE, 'r', encoding='utf-8') as cf:
-            DATAMUSE_CACHE = json.load(cf)
-    except Exception:
-        DATAMUSE_CACHE = {}
-else:
-    DATAMUSE_CACHE = {}
+# Database file for Datamuse cache
+DB_FILE = 'homophone_cache.db'
 
 # Curated overrides TEST
 CURATED = {
@@ -65,6 +55,32 @@ BLACKLIST = {
     "st": {"street"},
     # add more entries: "word": {"badsub1", "badsub2"}
 }
+
+# ————————————————————————————————————————————
+# Database Setup
+# ————————————————————————————————————————————
+
+def setup_database(db_file):
+    """Initializes a streamlined SQLite database for reciprocal lookups."""
+    conn = sqlite3.connect(db_file)
+    cursor = conn.cursor()
+    # A single, central table for all unique words
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS words (
+        id INTEGER PRIMARY KEY,
+        word TEXT UNIQUE NOT NULL
+    )''')
+    # A table to link words that are homophones of each other
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS homophone_links (
+        word_id INTEGER,
+        homophone_id INTEGER,
+        FOREIGN KEY (word_id) REFERENCES words(id),
+        FOREIGN KEY (homophone_id) REFERENCES words(id),
+        PRIMARY KEY (word_id, homophone_id)
+    )''')
+    conn.commit()
+    return conn
 
 # ————————————————————————————————————————————
 
@@ -156,7 +172,7 @@ def try_multiword_split(base):
     return best
 
 
-def get_homophone_substitution(token):
+def get_homophone_substitution(token, db_conn):
     # preserve punctuation
     prefix = re.match(r"^[{}]+".format(re.escape(string.punctuation)), token)
     suffix = re.search(r"[{}]+$".format(re.escape(string.punctuation)), token)
@@ -182,39 +198,81 @@ def get_homophone_substitution(token):
     if low in CURATED:
         return pfx + random.choice(CURATED[low]) + sfx
 
-    # build Datamuse candidate list with caching
-    if low in DATAMUSE_CACHE:
-        datamuse_list = DATAMUSE_CACHE[low]
+    cursor = db_conn.cursor()
+    
+    # Query the cache for existing links
+    cursor.execute("""
+        SELECT w2.word
+        FROM words w1
+        JOIN homophone_links hl ON w1.id = hl.word_id
+        JOIN words w2 ON w2.id = hl.homophone_id
+        WHERE w1.word = ?
+    """, (low,))
+    cached_results = cursor.fetchall()
+    
+    # Use a combined list of candidates for processing
+    all_candidates = set()
+
+    if cached_results:
+        # If we have cached results, use them.
+        all_candidates.update(row[0] for row in cached_results)
     else:
+        # --- CACHE MISS: Get candidates from ALL sources and cache them ---
+        
+        # 1. Get candidates from Datamuse API
         datamuse_list = []
         try:
             resp = requests.get(f"https://api.datamuse.com/words?sl={low}&max=20")
             resp.raise_for_status()
             datamuse_list = [entry['word'] for entry in resp.json() if entry.get('word')]
-        except:
-            pass
-        DATAMUSE_CACHE[low] = datamuse_list
-        # save cache
-        try:
-            with open(DATAMUSE_CACHE_FILE, 'w', encoding='utf-8') as cf:
-                json.dump(DATAMUSE_CACHE, cf)
-        except:
-            pass
+        except requests.RequestException as e:
+            print(f"API Error for word '{low}': {e}", file=sys.stderr)
+        
+        # 2. Get candidates from local CMUdict
+        cmu_list = generate_strict_homophones(low)
+        
+        # 3. Combine all new candidates into a single set
+        new_candidates_to_cache = set(datamuse_list + cmu_list)
+        all_candidates.update(new_candidates_to_cache) # Use this combined set now
 
-    candidates = set(generate_strict_homophones(low))
-    if not STRICT_ONLY:
-        for w in datamuse_list:
-            if w.isalpha() and w.lower() != low:
-                candidates.add(w)
+        # 4. Write the combined set to the database
+        if new_candidates_to_cache:
+            try:
+                def get_word_id(word):
+                    cursor.execute("INSERT OR IGNORE INTO words (word) VALUES (?)", (word,))
+                    return cursor.execute("SELECT id FROM words WHERE word = ?", (word,)).fetchone()[0]
+
+                original_word_id = get_word_id(low)
+
+                for cand_word in new_candidates_to_cache:
+                    candidate_id = get_word_id(cand_word)
+                    
+                    # Store forward and reverse links
+                    cursor.execute("INSERT OR IGNORE INTO homophone_links (word_id, homophone_id) VALUES (?, ?)", 
+                                   (original_word_id, candidate_id))
+                    cursor.execute("INSERT OR IGNORE INTO homophone_links (word_id, homophone_id) VALUES (?, ?)", 
+                                   (candidate_id, original_word_id))
+                db_conn.commit()
+            except sqlite3.Error as e:
+                print(f"Database write error: {e}", file=sys.stderr)
+
+    # The rest of the function now operates on the 'all_candidates' set,
+    # which is sourced from the cache or from the newly combined API/CMU lists.
+    
+    # Remove the original word from the candidate list
+    all_candidates.discard(low)
+    if not all_candidates:
+        return token
+
 
     # filter real English by frequency cutoff
-    primary = {w for w in candidates if zipf_frequency(w, 'en') >= MIN_ZIPF and len(w) > 1}
+    primary = {w for w in all_candidates if zipf_frequency(w, 'en') >= MIN_ZIPF and len(w) > 1}
     if STRICT_ONLY:
         filtered = primary
         if not filtered:
             return token
     else:
-        filtered = primary if primary else {w for w in candidates if len(w) > 1}
+        filtered = primary if primary else {w for w in all_candidates if len(w) > 1}
 
     if not filtered:
         return token
@@ -226,7 +284,7 @@ def get_homophone_substitution(token):
         return token
 
     # scoring
-    max_len = max(len(w) for w in filtered)
+    max_len = max(len(w) for w in filtered) if filtered else 1
     best = None; best_score = -1.0
     for w in filtered:
         pd = phone_dist(low, w)
@@ -236,18 +294,19 @@ def get_homophone_substitution(token):
         score = ALPHA*(1/(1+pd)) + BETA*(1/(1+od)) + GAMMA*fs + LENGTH_WEIGHT*length_term
         if score > best_score:
             best_score, best = score, w
-    return pfx + best + sfx
+    return pfx + best + sfx if best else token
 
 
-def homophonic_respelling(text):
+def homophonic_respelling(text, db_conn):
     text = apply_phrase_overrides(text)
     tokens = re.findall(r"[\w']+|\s+|[^\w\s]", text)
     out = []
     for tok in tokens:
         if tok.isalpha():
             is_title = tok.istitle(); is_upper = tok.isupper()
-            sub = get_homophone_substitution(tok)
-            if sub:
+            # Pass the db_conn to the substitution function
+            sub = get_homophone_substitution(tok, db_conn)
+            if sub and sub != tok:
                 sub = sub.upper() if is_upper else (sub.capitalize() if is_title else sub)
                 out.append(sub)
             else:
@@ -295,18 +354,26 @@ def main():
     LENGTH_WEIGHT = args.length_weight
     MIN_ZIPF = args.min_zipf
 
+    db_conn = None
     try:
+        db_conn = setup_database(DB_FILE)
         infile = open(args.input_file, encoding='utf-8')
     except Exception as e:
-        print(f"Error opening input: {e}", file=sys.stderr)
+        print(f"Error opening files: {e}", file=sys.stderr)
+        if db_conn:
+            db_conn.close()
         sys.exit(1)
 
     writer = open(args.output_file, 'w', encoding='utf-8') if args.output_file else sys.stdout
     for line in infile:
-        writer.write(homophonic_respelling(line))
+        # Pass the database connection through the call chain
+        writer.write(homophonic_respelling(line, db_conn))
+        
     infile.close()
     if args.output_file:
         writer.close()
+    if db_conn:
+        db_conn.close()
 
 if __name__ == '__main__':
     main()
