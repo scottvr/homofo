@@ -1,11 +1,11 @@
-# HoMofo – Homophonic Respeller
+# homofo – Homophonic Respeller
 
 Transform ordinary English text into "creative" respellings. Bypass copyright filters in AI models (LLM, TTS, music genAI, etc.) general AInarchy.
 
-(I personally would love to see a judicial ruling on a book that if read aloud sounds just like Harry Potter and the Sorceror's Stone, but when read visually it's just a bunch of nonsense words.  Also, what if - kinda like "Voldemort" should not be spoken - the book came shrinkwrapped in a license that says "You may not read this book aloud, but you can read it." It would surely [make a point to the litigating attorneys and judge.](https://github.com/scottvr/HoMofo/blob/main/mp3/README.md)
+(I personally would love to see a judicial ruling on a book that if read aloud sounds just like Harry Potter and the Sorceror's Stone, but when read visually it's just a bunch of nonsense words.  Also, what if - kinda like "Voldemort" should not be spoken - the book came shrinkwrapped in a license that says "You may not read this book aloud, but you can read it." It would surely [make a point to the litigating attorneys and judge.](https://github.com/scottvr/homofo/blob/main/mp3/README.md)
 
 #### Overview  
-HoMofo reads an input text (file or stdin), tokenizes it into words, punctuation, and whitespace, and replaces each word with a homophonic alternative. It supports:
+homofo reads an input text (file or stdin), tokenizes it into words, punctuation, and whitespace, and replaces each word with a homophonic alternative. It supports:
 
 - **Strict CMU-Dict homophones** (via the `pronouncing` library)  
 - **“Sounds-like” fallbacks** (via Datamuse API)  
@@ -20,7 +20,7 @@ Replacements are **scored** by a weighted combination of:
 4. **Optional length bonus** (LENGTH_WEIGHT)
 ### Caching and Performance
 
-HoMofo uses a tiered caching system to maximize performance and build an increasingly rich network of phonetic relationships over time.
+homofo uses a tiered caching system to maximize performance and build an increasingly rich network of phonetic relationships over time.
 
 1.  **Tier 1: In-Memory LRU Cache**
     * **What it is:** A "Least Recently Used" cache that stores the most recent word substitutions directly in memory.
@@ -44,12 +44,12 @@ By caching results from **both** sources, the tool builds connections that would
 * Later, you look up `possum`. The CMU dictionary might find a strict homophone, `possume`.
 * Now, the database implicitly links `awesome` -> `possum` -> `possume`.
 
-Over time, this allows HoMofo to discover and leverage a much wider and more creative set of phonetic substitutions than either the CMU dictionary or the Datamuse API could provide alone.
+Over time, this allows homofo to discover and leverage a much wider and more creative set of phonetic substitutions than either the CMU dictionary or the Datamuse API could provide alone.
 
 #### Installation  
 ```bash
-git clone https://github.com/scottvr/HoMofo.git
-cd HoMofo
+git clone https://github.com/scottvr/homofo.git
+cd homofo
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
