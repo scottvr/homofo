@@ -1,6 +1,6 @@
 I'm lookin' at you, Disney. Come at me, bro!
 
-[ai-generated mp3 with the lyrics below](https://github.com/scottvr/HoMofo/raw/main/mp3/Gad%20Goetz%20and%20Gizmos.mp3)
+[ai-generated mp3 with the lyrics below](https://github.com/scottvr/HoMofo/raw/main/mp3/part_of_your_whirled.mp3)
 
 ```text
 I just done zee how a whirlled at makes us one derfle dings cootbee bad
