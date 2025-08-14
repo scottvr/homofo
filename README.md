@@ -5,7 +5,7 @@ The transformed texts were submitted to Copyleaks’ web interface and API under
 
 These findings indicate that Copyleaks’ detection algorithms may rely heavily on direct lexical matching and fail to adequately capture semantically preserved content when surface orthography is significantly altered. This suggests that the system’s claimed accuracy rates may not generalize to adversarial text transformations, particularly those exploiting phonetic similarity and subtle grammatical restructuring.
 
-[Whitepaper - Part_of_Your_World-Bypassing_Copyright_Filters_Through_Homophony_and_Semantic_Mutation.pdf](Part_of_Your_World-Bypassing_Copyright_Filters_Through_Homophony_and_Semantic_Mutation.pdf)
+[Whitepaper - Part_of_Your_World-Bypassing_Copyright_Filters_Through_Homophony_and_Semantic_Mutation.pdf](https://paperclipmaximizer.ai/Part_of_Your_World-Bypassing_Copyright_Filters_Through_Homophony_and_Semantic_Mutation.pdf)
 
 # homofo – Homophonic Respeller
 
@@ -185,3 +185,4 @@ GENEROUS
 
 #### License  
 MIT © 2025 Scott VanRavenswaay (with help from chatgpt-4o-mini-high)
+
