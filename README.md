@@ -1,8 +1,16 @@
+## Whitepaper: Methods and Findings
+We evaluated the Copyleaks plagiarism detection platform’s ability to detect phonetically and semantically equivalent text that differs orthographically from the original source. To construct the test corpus, we applied automated transformations using the PASTAL and homofo.py tools to selected copyrighted works, producing outputs that maintained original meaning and phonetic similarity while replacing key words with homophones, synonyms, or grammatical mutations.
+
+The transformed texts were submitted to Copyleaks’ web interface and API under standard configuration, and the detection scores were recorded. Copyleaks’ own marketing materials cite accuracy rates above 99 % on “paraphrased and disguised” text. In contrast, our trials yielded detection rates as low as 0 %, with multiple transformed works passing undetected despite maintaining near-verbatim semantic and phonetic equivalence to the originals.
+
+These findings indicate that Copyleaks’ detection algorithms may rely heavily on direct lexical matching and fail to adequately capture semantically preserved content when surface orthography is significantly altered. This suggests that the system’s claimed accuracy rates may not generalize to adversarial text transformations, particularly those exploiting phonetic similarity and subtle grammatical restructuring.
+
+[Whitepaper - Part_of_Your_World-Bypassing_Copyright_Filters_Through_Homophony_and_Semantic_Mutation.pdf](Part_of_Your_World-Bypassing_Copyright_Filters_Through_Homophony_and_Semantic_Mutation.pdf)
+
 # homofo – Homophonic Respeller
 
 Transform ordinary English text into "creative" respellings. Bypass copyright filters in AI models (LLM, TTS, music genAI, etc.) general AInarchy.
 
-(I personally would love to see a judicial ruling on a book that if read aloud sounds just like Harry Potter and the Sorceror's Stone, but when read visually it's just a bunch of nonsense words.  Also, what if - kinda like "Voldemort" should not be spoken - the book came shrinkwrapped in a license that says "You may not read this book aloud, but you can read it." It would surely [make a point to the litigating attorneys and judge.](https://github.com/scottvr/homofo/blob/main/mp3/README.md)
 
 #### Overview  
 homofo reads an input text (file or stdin), tokenizes it into words, punctuation, and whitespace, and replaces each word with a homophonic alternative. It supports:
