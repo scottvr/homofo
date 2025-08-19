@@ -106,7 +106,7 @@ python homofo.py [OPTIONS] INPUT_FILE [OUTPUT_FILE]
      - `GAMMA` then ranks that pruned list by frequency.  
 
 5. **LENGTH_WEIGHT (length bonus)**  
-   - **What it does:** Adds a normalized bonus proportional to a candidate’s length, so multi-syllable or multi-word respellings (e.g. “bean” vs “bee”, or “per pill” vs “per”) can win.  
+   - **What it does:** Adds a normalized bonus proportional to a candidate’s length, so multi-syllable or multi-word respellings can win.  
 
 ---
 
@@ -185,4 +185,5 @@ GENEROUS
 
 #### License  
 MIT © 2025 Scott VanRavenswaay (with help from chatgpt-4o-mini-high)
+
 
