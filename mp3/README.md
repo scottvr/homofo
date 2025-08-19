@@ -1,6 +1,6 @@
 I'm lookin' at you, Disney. Come at me, bro!
 
-[ai-generated mp3 with the lyrics below](part_of_your_whirled.mp3)
+[ai-generated mp3 with the homofo.py-generated lyrics below](part_of_your_whirled.mp3)
 
 ```text
 I just done zee how a whirled at makes us one derfle dings cootbee bad.
@@ -50,3 +50,4 @@ Rout of the see
 Fish I could bee
 partidat whirled.
 ```
+
